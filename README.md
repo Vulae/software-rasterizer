@@ -1,5 +1,5 @@
 
-Dispays a .obj file into the console window.
+Displays a .obj file into the console window.
 Felt bored, made this :)
 
 Donno if I'm going to keep working on this.
