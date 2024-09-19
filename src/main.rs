@@ -1,8 +1,10 @@
 mod camera;
 mod display;
+mod loaders;
 mod matrix;
 mod mesh;
 mod raycast;
+mod reader;
 mod scene;
 mod vector;
 
@@ -12,7 +14,6 @@ use camera::{Camera, CameraOrbitController};
 use clap::Parser;
 use display::{Cell, Display, Drawer};
 use matrix::Matrix4x4;
-use mesh::Mesh;
 use scene::Scene;
 use termion::{input::TermRead, raw::IntoRawMode};
 use vector::Vec3;
@@ -103,13 +104,22 @@ fn render(
 
 #[derive(Parser)]
 struct Cli {
-    obj_file: PathBuf,
+    file: PathBuf,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
-    let mesh = Mesh::from_obj(&std::fs::read_to_string(cli.obj_file)?)?;
+    let scene = match cli.file.extension().and_then(|s| s.to_str()) {
+        Some("obj") => {
+            let mut scene = Scene::new();
+            let mesh = loaders::obj::load_mesh(std::fs::File::open(cli.file)?)?;
+            scene.meshes.push(mesh);
+            scene
+        }
+        Some("glb") => loaders::gltf::load_scene(std::fs::File::open(cli.file)?)?,
+        _ => panic!("Invalid file."),
+    };
 
     let stdin = std::io::stdin();
     // Initialize stdout for raw mode & mouse input.
@@ -129,9 +139,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut controller = CameraOrbitController::new(Camera::new());
     controller.zoom(-50.0);
-
-    let mut scene = Scene::new();
-    scene.meshes.push(mesh);
 
     let mut render_count = 0;
     let mut mouse_button: Option<termion::event::MouseButton> = None;
