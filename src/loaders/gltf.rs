@@ -57,7 +57,7 @@ struct JsonBufferView {
     buffer: usize,
     byteLength: usize,
     byteOffset: usize,
-    target: usize,
+    target: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -267,6 +267,10 @@ pub fn load_scene(file: impl Read) -> Result<Scene, Box<dyn Error>> {
 
     json.scenes[json.scene].nodes.iter().for_each(|node_index| {
         let node = &json.nodes[*node_index];
+        // TODO: Temporary thing for testing
+        //if node.name.to_lowercase().contains("skybox") {
+        //    return;
+        //}
         let mesh = &json.meshes[node.mesh];
         mesh.primitives.iter().for_each(|primitive| {
             let vertices: Vec<Vec3> = IntoIterator::into_iter(json

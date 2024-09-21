@@ -10,10 +10,9 @@ mod vector;
 
 use std::{error::Error, fmt::Write, io::Write as _, path::PathBuf};
 
-use camera::{Camera, CameraOrbitController};
+use camera::{Camera, CameraOrbitController, PerspectiveCamera};
 use clap::Parser;
 use display::{Cell, Display, Drawer};
-use matrix::Matrix4x4;
 use scene::Scene;
 use termion::{input::TermRead, raw::IntoRawMode};
 use vector::Vec3;
@@ -21,28 +20,24 @@ use vector::Vec3;
 static CELL_ASPECT_RATIO: f32 = 9.0 / 20.0;
 
 static BG_COLOR: Cell = Cell::new_bg(termion::color::Rgb(0, 0, 0));
-static FG_COLOR: Cell = Cell::new_bg(termion::color::Rgb(255, 255, 255));
+//static FG_COLOR: Cell = Cell::new_bg(termion::color::Rgb(255, 255, 255));
 
 fn render(
     debug_text: &mut String,
     drawer: &mut Drawer<'_>,
     scene: &Scene,
-    camera: &Camera,
+    camera: &impl Camera,
 ) -> Result<(), Box<dyn Error>> {
-    let camera_matrix = camera.view_matrix();
-
-    let aspect_ratio = (drawer.width() as f32) * CELL_ASPECT_RATIO / (drawer.height() as f32);
-    let projection_matrix =
-        Matrix4x4::perspective_projection_matrix(aspect_ratio, 90.0, 0.1, 1000.0);
+    let camera_matrix = camera.matrix_view();
+    let camera_frustum = camera.frustum();
+    let projection_matrix = camera.matrix_projection();
 
     writeln!(
         debug_text,
-        "out buffer: {}x{}",
+        "Out buffer: {}x{}",
         drawer.width(),
         drawer.height(),
     )?;
-
-    writeln!(debug_text, "camera: {:?}", camera)?;
 
     let mut render_triangles = scene
         .meshes
@@ -50,6 +45,14 @@ fn render(
         .flat_map(|mesh| {
             mesh.triangles.iter().filter_map(|triangle| {
                 let mut camera_triangle = triangle.multiply_matrix(&camera_matrix);
+
+                // HACK: *Bad* frustum culling
+                if !camera_frustum.contains(&camera_triangle.v0)
+                    || !camera_frustum.contains(&camera_triangle.v1)
+                    || !camera_frustum.contains(&camera_triangle.v2)
+                {
+                    return None;
+                }
 
                 let camera_triangle_normal = camera_triangle.normal();
 
@@ -75,7 +78,7 @@ fn render(
 
     // HACK: Temporary triangle depth 'check'
     render_triangles
-        .sort_by(|a, b| (b.v0.z + b.v1.z + b.v2.z).total_cmp(&(a.v0.z + a.v1.z + a.v2.z)));
+        .sort_by(|a, b| (a.v0.z + a.v1.z + a.v2.z).total_cmp(&(b.v0.z + b.v1.z + b.v2.z)));
 
     render_triangles.iter().for_each(|triangle| {
         let screen_triangle = triangle
@@ -137,8 +140,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
     stdout.flush()?;
 
-    let mut controller = CameraOrbitController::new(Camera::new());
-    controller.zoom(-50.0);
+    let mut controller = CameraOrbitController::new(PerspectiveCamera::new(90.0, 0.1, 1000.0));
+    controller.set_distance(100.0);
 
     let mut render_count = 0;
     let mut mouse_button: Option<termion::event::MouseButton> = None;
@@ -146,6 +149,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     for event in stdin.events() {
         let mut display = Display::init(&BG_COLOR)?;
+        controller.camera.aspect =
+            (display.width() as f32) * CELL_ASPECT_RATIO / (display.height() as f32);
         let mut debug_text = String::new();
 
         let event = event?;
@@ -156,10 +161,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             termion::event::Event::Mouse(termion::event::MouseEvent::Press(press_button, x, y)) => {
                 match press_button {
                     termion::event::MouseButton::WheelUp => {
-                        controller.zoom(5.0);
+                        controller.zoom_in();
                     }
                     termion::event::MouseButton::WheelDown => {
-                        controller.zoom(-5.0);
+                        controller.zoom_out();
                     }
                     _ => {
                         mouse_button = Some(press_button);
@@ -195,6 +200,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             mouse_button, mouse_pos, mouse_movement,
         )?;
 
+        writeln!(debug_text, "Controller: {:?}", controller)?;
+
         let mut drawer = Drawer::new(&mut display);
 
         if mouse_button == Some(termion::event::MouseButton::Left) {
@@ -205,7 +212,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         render_count += 1;
-        writeln!(debug_text, "Render Count: {}", render_count)?;
+        writeln!(debug_text, "Render count: {}", render_count)?;
         render(&mut debug_text, &mut drawer, &scene, &controller.camera)?;
 
         drawer.text(0, 0, &debug_text, None, None);

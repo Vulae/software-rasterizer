@@ -157,9 +157,11 @@ impl<'a> Drawer<'a> {
         bg: Option<termion::color::Rgb>,
         fg: Option<termion::color::Rgb>,
     ) {
-        text.lines().enumerate().for_each(|(dy, line)| {
-            line.char_indices().for_each(|(dx, char)| {
-                if let Some(cell) = self.get_mut(x + dx as isize, y + dy as isize) {
+        let mut dx = 0;
+        let mut dy = 0;
+        text.lines().for_each(|line| {
+            line.chars().enumerate().for_each(|(i, char)| {
+                if let Some(cell) = self.get_mut(x + dx, y + dy) {
                     if let Some(fg) = fg {
                         cell.fg = fg
                     }
@@ -168,7 +170,15 @@ impl<'a> Drawer<'a> {
                     }
                     cell.c = char;
                 }
+                dx += 1;
+                // Line overflow
+                if dx >= self.width() && i < line.len() {
+                    dx = 0;
+                    dy += 1;
+                }
             });
+            dx = 0;
+            dy += 1;
         });
     }
 

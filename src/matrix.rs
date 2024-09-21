@@ -29,15 +29,15 @@ impl Matrix4x4 {
     }
 
     #[rustfmt::skip]
-    pub fn view_matrix(camera_pos: Vec3, camera_dir: Vec3, camera_up: Vec3) -> Self {
+    pub fn view_matrix(camera_pos: &Vec3, camera_dir: &Vec3, camera_up: &Vec3) -> Self {
         let camera_dir = camera_dir.normalized();
-        let camera_right = Vec3::cross(&camera_up, &camera_dir);
+        let camera_right = Vec3::cross(camera_up, &camera_dir);
         let camera_up = Vec3::cross(&camera_dir, &camera_right);
         Self::new([
-            [ camera_right.x                        , camera_up.x                        , camera_dir.x                        , 0.0 ],
-            [ camera_right.y                        , camera_up.y                        , camera_dir.y                        , 0.0 ],
-            [ camera_right.z                        , camera_up.z                        , camera_dir.z                        , 0.0 ],
-            [ -Vec3::dot(&camera_right, &camera_pos), -Vec3::dot(&camera_up, &camera_pos), -Vec3::dot(&camera_dir, &camera_pos), 1.0 ],
+            [ camera_right.x                       , camera_up.x                       , camera_dir.x                       , 0.0 ],
+            [ camera_right.y                       , camera_up.y                       , camera_dir.y                       , 0.0 ],
+            [ camera_right.z                       , camera_up.z                       , camera_dir.z                       , 0.0 ],
+            [ -Vec3::dot(&camera_right, camera_pos), -Vec3::dot(&camera_up, camera_pos), -Vec3::dot(&camera_dir, camera_pos), 1.0 ],
         ])
     }
 
@@ -160,12 +160,14 @@ macro_rules! matrix4x4 {
 impl Index<(usize, usize)> for Matrix4x4 {
     type Output = f32;
 
+    #[inline]
     fn index(&self, index: (usize, usize)) -> &Self::Output {
         &self.elements[index.1][index.0]
     }
 }
 
 impl IndexMut<(usize, usize)> for Matrix4x4 {
+    #[inline]
     fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
         &mut self.elements[index.1][index.0]
     }
