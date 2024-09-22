@@ -14,7 +14,7 @@ use camera::{Camera, CameraOrbitController, PerspectiveCamera};
 use clap::Parser;
 use display::{Cell, Display, Drawer};
 use scene::Scene;
-use termion::{input::TermRead, raw::IntoRawMode};
+use termion::{cursor::DetectCursorPos, input::TermRead, raw::IntoRawMode};
 use vector::Vec3;
 
 static CELL_ASPECT_RATIO: f32 = 9.0 / 20.0;
@@ -136,7 +136,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
     write!(
         stdout,
-        "Press Q or ESC to quit. Click & drag mouse to orbit. Scroll to zoom."
+        "Press Q or ESC to quit. Leftclick & drag mouse to orbit. Leftclick + rightclick & drag mouse to pan. Scroll to zoom."
     )?;
     stdout.flush()?;
 
@@ -144,7 +144,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     controller.set_distance(100.0);
 
     let mut render_count = 0;
-    let mut mouse_button: Option<termion::event::MouseButton> = None;
+    let mut mouse_left: bool = false;
+    let mut mouse_right: bool = false;
     let mut mouse_pos: (usize, usize) = (0, 0);
 
     for event in stdin.events() {
@@ -167,14 +168,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                         controller.zoom_out();
                     }
                     _ => {
-                        mouse_button = Some(press_button);
+                        match press_button {
+                            termion::event::MouseButton::Left => mouse_left = true,
+                            termion::event::MouseButton::Right => mouse_right = true,
+                            _ => {}
+                        }
                         mouse_movement = (0, 0);
                         mouse_pos = ((x as usize) - 1, (y as usize) - 1);
                     }
                 }
             }
             termion::event::Event::Mouse(termion::event::MouseEvent::Release(x, y)) => {
-                mouse_button = None;
+                mouse_left = false;
+                mouse_right = false;
                 mouse_movement = (
                     (x as isize) - 1 - (mouse_pos.0 as isize),
                     (y as isize) - 1 - (mouse_pos.1 as isize),
@@ -196,19 +202,26 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         writeln!(
             debug_text,
-            "{:?} {:?} {:?}",
-            mouse_button, mouse_pos, mouse_movement,
+            "{} {} {:?} {:?}",
+            mouse_left, mouse_right, mouse_pos, mouse_movement,
         )?;
 
         writeln!(debug_text, "Controller: {:?}", controller)?;
 
         let mut drawer = Drawer::new(&mut display);
 
-        if mouse_button == Some(termion::event::MouseButton::Left) {
-            controller.grab_move(
-                (mouse_movement.0 as f32) / 10.0,
-                (mouse_movement.1 as f32) / CELL_ASPECT_RATIO / 10.0,
-            );
+        if mouse_left {
+            if !mouse_right {
+                controller.grab_move(
+                    (mouse_movement.0 as f32) / 10.0,
+                    (mouse_movement.1 as f32) / CELL_ASPECT_RATIO / 10.0,
+                );
+            } else {
+                controller.pan_move(
+                    (mouse_movement.0 as f32) / 100.0,
+                    (mouse_movement.1 as f32) / CELL_ASPECT_RATIO / 100.0,
+                );
+            }
         }
 
         render_count += 1;

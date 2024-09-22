@@ -208,6 +208,11 @@ impl<C: Camera> CameraOrbitController<C> {
         self.camera.r#move(-self.distance, 0.0, 0.0);
     }
 
+    pub fn pan_move(&mut self, mx: f32, my: f32) {
+        self.camera
+            .r#move(0.0, my * self.distance, mx * self.distance);
+    }
+
     pub fn distance(&self) -> f32 {
         self.distance
     }
