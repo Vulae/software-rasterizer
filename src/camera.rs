@@ -69,10 +69,10 @@ impl Camera for PerspectiveCamera {
     }
 
     fn rotate(&mut self, pitch: f32, yaw: f32, roll: f32) {
-        // TODO: Roll???
         self.direction = (self.direction * Matrix4x4::rotate_axis(&self.up(), yaw)).normalized();
         self.direction =
             (self.direction * Matrix4x4::rotate_axis(&-self.right(), pitch)).normalized();
+        self.up = (self.up * Matrix4x4::rotate_axis(&self.forward(), roll)).normalized();
         self.up = Vec3::cross(&-self.right(), &self.direction).normalized();
     }
 
@@ -104,6 +104,10 @@ impl<C: Camera> CameraOrbitController<C> {
     pub fn pan_move(&mut self, mx: f32, my: f32) {
         self.camera
             .r#move(0.0, my * self.distance, mx * self.distance);
+    }
+
+    pub fn roll(&mut self, roll: f32) {
+        self.camera.rotate(0.0, 0.0, roll);
     }
 
     pub fn distance(&self) -> f32 {

@@ -196,6 +196,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     continue;
                 }
             }
+            termion::event::Event::Key(termion::event::Key::Left) => {
+                controller.roll(0.2);
+            }
+            termion::event::Event::Key(termion::event::Key::Right) => {
+                controller.roll(-0.2);
+            }
             _ => {}
         }
 
