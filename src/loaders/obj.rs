@@ -1,6 +1,6 @@
 use std::{error::Error, io::Read};
 
-use crate::{mesh::Mesh, vector::Vec3};
+use crate::{math::vector3::Vec3, mesh::Mesh};
 
 pub fn load_mesh(mut file: impl Read) -> Result<Mesh, Box<dyn Error>> {
     let mut vertices: Vec<Vec3> = Vec::new();

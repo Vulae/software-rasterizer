@@ -2,7 +2,7 @@
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use crate::matrix::Matrix4x4;
+use super::matrix4x4::Matrix4x4;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vec3 {

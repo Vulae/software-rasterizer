@@ -8,10 +8,10 @@ use std::{error::Error, io::Read};
 use serde::Deserialize;
 use termion::terminal_size_pixels;
 
+use crate::math::vector3::Vec3;
 use crate::mesh::Mesh;
 use crate::reader::Reader;
 use crate::scene::Scene;
-use crate::vector::Vec3;
 
 #[derive(Debug, Deserialize)]
 struct JsonScene {

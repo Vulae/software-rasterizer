@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use crate::vector::Vec3;
+use crate::math::vector3::Vec3;
 
 #[derive(Debug)]
 pub struct Ray {

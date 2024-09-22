@@ -1,21 +1,20 @@
 mod camera;
 mod display;
 mod loaders;
-mod matrix;
+mod math;
 mod mesh;
 mod raycast;
 mod reader;
 mod scene;
-mod vector;
 
 use std::{error::Error, fmt::Write, io::Write as _, path::PathBuf};
 
 use camera::{Camera, CameraOrbitController, PerspectiveCamera};
 use clap::Parser;
 use display::{Cell, Display, Drawer};
+use math::vector3::Vec3;
 use scene::Scene;
-use termion::{cursor::DetectCursorPos, input::TermRead, raw::IntoRawMode};
-use vector::Vec3;
+use termion::{input::TermRead, raw::IntoRawMode};
 
 static CELL_ASPECT_RATIO: f32 = 9.0 / 20.0;
 

@@ -3,7 +3,6 @@
 use crate::{
     mesh::Mesh,
     raycast::{Ray, RayIntersection},
-    vector::Vec3,
 };
 
 #[derive(Debug)]

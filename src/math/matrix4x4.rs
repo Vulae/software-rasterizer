@@ -2,7 +2,7 @@
 
 use std::ops::{Index, IndexMut, Mul};
 
-use crate::{vec3, vector::Vec3};
+use super::vector3::Vec3;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Matrix4x4 {

@@ -1,101 +1,6 @@
 #![allow(unused)]
 
-use crate::{matrix::Matrix4x4, vector::Vec3};
-
-#[derive(Debug, Clone, Copy)]
-pub struct Plane {
-    direction: Vec3,
-    distance: f32,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum PlaneSide {
-    Frontside,
-    Onside,
-    Backside,
-}
-
-impl Plane {
-    pub fn new(direction: Vec3, distance: f32) -> Self {
-        Self {
-            direction: direction.normalized(),
-            distance,
-        }
-    }
-
-    pub fn signed_distance(&self, position: &Vec3) -> f32 {
-        Vec3::dot(&self.direction, position) - self.distance
-    }
-
-    pub fn side(&self, position: &Vec3) -> PlaneSide {
-        const EPS: f32 = 0.000060915946;
-        let distance = self.signed_distance(position);
-        if distance < -EPS {
-            PlaneSide::Backside
-        } else if distance > EPS {
-            PlaneSide::Frontside
-        } else {
-            PlaneSide::Onside
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Frustum {
-    planes: Box<[Plane]>,
-}
-
-impl Frustum {
-    // TODO: Check if frustum is closed.
-    pub fn new(planes: Box<[Plane]>) -> Self {
-        Self { planes }
-    }
-
-    pub fn planes(&self) -> impl Iterator<Item = &Plane> {
-        self.planes.iter()
-    }
-
-    pub fn contains(&self, position: &Vec3) -> bool {
-        self.planes
-            .iter()
-            .all(|plane| plane.side(position) != PlaneSide::Frontside)
-    }
-}
-
-#[test]
-fn frustum_tests() {
-    {
-        let frustum = Frustum::new(Box::new([
-            Plane::new(Vec3::new(0.0, 0.0, 1.0), -1.0),  // Near plane
-            Plane::new(Vec3::new(0.0, 0.0, -1.0), -1.0), // Far plane
-            Plane::new(Vec3::new(1.0, 0.0, 0.0), -1.0),  // Left plane
-            Plane::new(Vec3::new(-1.0, 0.0, 0.0), -1.0), // Right plane
-            Plane::new(Vec3::new(0.0, 1.0, 0.0), -1.0),  // Bottom plane
-            Plane::new(Vec3::new(0.0, -1.0, 0.0), -1.0), // Top plane
-        ]));
-
-        let point = Vec3::new(0.0, 0.0, 0.0);
-
-        assert!(frustum.contains(&point));
-    }
-    {
-        let mut camera = PerspectiveCamera::new(1.0, 0.1, 100.0);
-        camera.r#move(-10.0, 0.0, 0.0);
-        let frustum = camera.frustum();
-
-        let point = Vec3::new(0.0, 0.0, 0.0);
-        frustum.planes().enumerate().for_each(|(i, plane)| {
-            println!(
-                "{}: {:?} {:?}",
-                i,
-                plane.signed_distance(&point),
-                plane.side(&point),
-            );
-        });
-
-        assert!(frustum.contains(&point));
-    }
-}
+use crate::math::{frustum::Frustum, matrix4x4::Matrix4x4, plane::Plane, vector3::Vec3};
 
 pub trait Camera {
     fn position(&self) -> Vec3;
@@ -115,20 +20,8 @@ pub trait Camera {
     }
     fn matrix_projection(&self) -> Matrix4x4;
 
-    #[rustfmt::skip]
     fn frustum(&self) -> Frustum {
-        // https://gamedev.stackexchange.com/questions/159918/how-do-you-handle-large-triangles-with-frustum#answer-159920
-        // TODO: Is this valid for every type of projection?
-        // FIXME: I don't think this works properly lol
-        let m = self.matrix_view() * self.matrix_projection();
-        Frustum::new(Box::new([
-            Plane::new(Vec3::new(m[(0, 3)] + m[(0, 2)], m[(1, 3)] + m[(1, 2)], m[(2, 3)] + m[(2, 2)]), m[(3, 3)] + m[(3, 2)]), // Near
-            Plane::new(Vec3::new(m[(0, 3)] - m[(0, 2)], m[(1, 3)] - m[(1, 2)], m[(2, 3)] - m[(2, 2)]), m[(3, 3)] - m[(3, 2)]), // Far
-            Plane::new(Vec3::new(m[(0, 3)] + m[(0, 0)], m[(1, 3)] + m[(1, 0)], m[(2, 3)] + m[(2, 0)]), m[(3, 3)] + m[(3, 0)]), // Left
-            Plane::new(Vec3::new(m[(0, 3)] - m[(0, 0)], m[(1, 3)] - m[(1, 0)], m[(2, 3)] - m[(2, 0)]), m[(3, 3)] - m[(3, 0)]), // Right
-            Plane::new(Vec3::new(m[(0, 3)] - m[(0, 1)], m[(1, 3)] - m[(1, 1)], m[(2, 3)] - m[(2, 1)]), m[(3, 3)] - m[(3, 1)]), // Top
-            Plane::new(Vec3::new(m[(0, 3)] + m[(0, 1)], m[(1, 3)] + m[(1, 1)], m[(2, 3)] + m[(2, 1)]), m[(3, 3)] + m[(3, 1)]), // Bottom
-        ]))
+        Frustum::from_projection_matrix(&(self.matrix_view() * self.matrix_projection()))
     }
 }
 

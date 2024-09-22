@@ -3,9 +3,8 @@
 use std::error::Error;
 
 use crate::{
-    matrix::Matrix4x4,
+    math::{matrix4x4::Matrix4x4, vector3::Vec3},
     raycast::{Ray, RayIntersection},
-    vector::Vec3,
 };
 
 #[derive(Debug, Clone)]
