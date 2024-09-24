@@ -8,10 +8,20 @@ use std::{error::Error, io::Read};
 use serde::Deserialize;
 use termion::terminal_size_pixels;
 
+use crate::material::{Material, MaterialGenericColor};
 use crate::math::vector3::Vec3;
 use crate::mesh::Mesh;
 use crate::reader::Reader;
 use crate::scene::Scene;
+
+// NOTE: This is only really tested on a few files, probably won't work with anything that isn't
+// exported by Blender 4.2.1
+
+#[derive(Debug, Deserialize)]
+struct JsonAsset {
+    generator: String,
+    version: String,
+}
 
 #[derive(Debug, Deserialize)]
 struct JsonScene {
@@ -37,6 +47,48 @@ struct JsonMeshPrimitive {
     indices: usize,
     material: Option<usize>,
     mode: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct JsonMaterial {
+    doubleSided: bool,
+    emissiveFactor: [f32; 3],
+    emissiveTexture: Option<JsonMaterialEmissiveTexture>,
+    name: String,
+    pbrMetallicRoughness: JsonMaterialPbrMetallicRoughness,
+}
+
+#[derive(Debug, Deserialize)]
+struct JsonMaterialEmissiveTexture {
+    index: usize,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct JsonMaterialPbrMetallicRoughness {
+    baseColorFactor: [f32; 4],
+}
+
+#[derive(Debug, Deserialize)]
+struct JsonTexture {
+    sampler: usize,
+    source: usize,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct JsonImage {
+    bufferView: usize,
+    mimeType: String,
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct JsonSampler {
+    magFilter: u32,
+    minFilter: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -69,10 +121,14 @@ struct JsonBuffer {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 struct JsonRoot {
+    asset: JsonAsset,
     scene: usize,
     scenes: Vec<JsonScene>,
     nodes: Vec<JsonNode>,
     meshes: Vec<JsonMesh>,
+    materials: Vec<JsonMaterial>,
+    textures: Vec<JsonTexture>,
+    images: Vec<JsonImage>,
     accessors: Vec<JsonAccessor>,
     bufferViews: Vec<JsonBufferView>,
     buffers: Vec<JsonBuffer>,
@@ -136,6 +192,12 @@ impl From<AccessorValue> for Vec3 {
 }
 
 impl JsonRoot {
+    fn read_view<'a>(&self, buffers: &'a [Box<[u8]>], index: usize) -> &'a [u8] {
+        let view = &self.bufferViews[index];
+        let buffer = &buffers[view.buffer];
+        &buffer[view.byteOffset..=(view.byteOffset + view.byteLength)]
+    }
+
     fn read_accessor(&self, buffers: &[Box<[u8]>], index: usize) -> Box<[AccessorValue]> {
         // TODO: I was lazy and didn't care about error handling.
         // FIXME: Doesn't follow: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#data-alignment
@@ -281,22 +343,24 @@ pub fn load_scene(file: impl Read) -> Result<Scene, Box<dyn Error>> {
                 .read_accessor(&buffers, primitive.indices))
                 .map(|v| v.clone().into()) // ???
                 .collect();
-            let indices: Vec<(usize, usize, usize, termion::color::Rgb)> = indices
+            let indices: Vec<(usize, usize, usize)> = indices
                 .chunks(3)
-                .map(|chunk| {
-                    (
-                        chunk[0],
-                        chunk[1],
-                        chunk[2],
-                        termion::color::Rgb(255, 255, 255),
-                    )
-                })
+                .map(|chunk| (chunk[0], chunk[1], chunk[2]))
                 .collect();
 
             scene
                 .meshes
-                .push(Mesh::new_from_vertices_indices(&vertices, &indices));
+                .push(Mesh::new_from_vertices_indices(0, &vertices, &indices));
         });
+    });
+
+    json.materials.iter().for_each(|material| {
+        // TEMP: Just only use white material for testing
+        scene
+            .materials
+            .push(Material::GenericColor(MaterialGenericColor::new(
+                image::Rgb([255, 255, 255]),
+            )));
     });
 
     Ok(scene)

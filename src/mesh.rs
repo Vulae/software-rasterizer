@@ -12,12 +12,11 @@ pub struct Triangle {
     pub v0: Vec3,
     pub v1: Vec3,
     pub v2: Vec3,
-    pub color: termion::color::Rgb,
 }
 
 impl Triangle {
-    pub fn new(v0: Vec3, v1: Vec3, v2: Vec3, color: termion::color::Rgb) -> Self {
-        Self { v0, v1, v2, color }
+    pub fn new(v0: Vec3, v1: Vec3, v2: Vec3) -> Self {
+        Self { v0, v1, v2 }
     }
 
     pub fn normal(&self) -> Vec3 {
@@ -90,46 +89,49 @@ impl Triangle {
 
 #[derive(Debug)]
 pub struct Mesh {
+    pub material_index: usize,
     pub triangles: Vec<Triangle>,
 }
 
 impl Mesh {
-    pub fn new(triangles: Vec<Triangle>) -> Self {
-        Self { triangles }
+    pub fn new(material_index: usize, triangles: Vec<Triangle>) -> Self {
+        Self {
+            material_index,
+            triangles,
+        }
     }
 
     pub fn new_from_vertices_indices(
+        material_index: usize,
         vertices: &[Vec3],
-        indices: &[(usize, usize, usize, termion::color::Rgb)],
+        indices: &[(usize, usize, usize)],
     ) -> Self {
         Self::new(
+            material_index,
             indices
                 .iter()
-                .map(|(i0, i1, i2, color)| {
-                    Triangle::new(vertices[*i0], vertices[*i1], vertices[*i2], *color)
-                })
+                .map(|(i0, i1, i2)| Triangle::new(vertices[*i0], vertices[*i1], vertices[*i2]))
                 .collect(),
         )
     }
 
-    pub fn new_plane() -> Self {
+    pub fn new_plane(material_index: usize) -> Self {
         Mesh::new_from_vertices_indices(
+            material_index,
             &[
                 Vec3::new(-1.0, -1.0, 0.0),
                 Vec3::new(1.0, -1.0, 0.0),
                 Vec3::new(-1.0, 1.0, 0.0),
                 Vec3::new(1.0, 1.0, 0.0),
             ],
-            &[
-                (0, 2, 1, termion::color::Rgb(255, 0, 0)),
-                (1, 2, 3, termion::color::Rgb(0, 255, 0)),
-            ],
+            &[(0, 2, 1), (1, 2, 3)],
         )
     }
 
-    pub fn new_cube() -> Self {
+    pub fn new_cube(material_index: usize) -> Self {
         // TODO: The indices are incorrect causing some faces to be inverted. And I'm too lazy to fix.
         Mesh::new_from_vertices_indices(
+            material_index,
             &[
                 Vec3::new(-1.0, -1.0, -1.0),
                 Vec3::new(1.0, -1.0, -1.0),
@@ -141,18 +143,18 @@ impl Mesh {
                 Vec3::new(-1.0, 1.0, 1.0),
             ],
             &[
-                (0, 1, 2, termion::color::Rgb(255, 0, 0)),
-                (0, 2, 3, termion::color::Rgb(255, 0, 0)),
-                (4, 5, 6, termion::color::Rgb(0, 255, 0)),
-                (4, 6, 7, termion::color::Rgb(0, 255, 0)),
-                (0, 1, 5, termion::color::Rgb(0, 0, 255)),
-                (0, 5, 4, termion::color::Rgb(0, 0, 255)),
-                (2, 3, 7, termion::color::Rgb(255, 255, 0)),
-                (2, 7, 6, termion::color::Rgb(255, 255, 0)),
-                (0, 3, 7, termion::color::Rgb(255, 0, 255)),
-                (0, 7, 4, termion::color::Rgb(255, 0, 255)),
-                (1, 2, 6, termion::color::Rgb(0, 255, 255)),
-                (1, 6, 5, termion::color::Rgb(0, 255, 255)),
+                (0, 1, 2),
+                (0, 2, 3),
+                (4, 5, 6),
+                (4, 6, 7),
+                (0, 1, 5),
+                (0, 5, 4),
+                (2, 3, 7),
+                (2, 7, 6),
+                (0, 3, 7),
+                (0, 7, 4),
+                (1, 2, 6),
+                (1, 6, 5),
             ],
         )
     }

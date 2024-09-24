@@ -1,6 +1,8 @@
+mod async_stdin;
 mod camera;
 mod display;
 mod loaders;
+mod material;
 mod math;
 mod mesh;
 mod raycast;
@@ -12,7 +14,10 @@ use std::{error::Error, fmt::Write, io::Write as _, path::PathBuf};
 use camera::{Camera, CameraOrbitController, PerspectiveCamera};
 use clap::Parser;
 use display::{Cell, Display, Drawer};
+use image::Pixel;
+use material::{Material, MaterialGenericColor};
 use math::vector3::Vec3;
+use mesh::Triangle;
 use scene::Scene;
 use termion::{input::TermRead, raw::IntoRawMode};
 
@@ -38,12 +43,19 @@ fn render(
         drawer.height(),
     )?;
 
-    let mut render_triangles = scene
+    #[derive(Debug)]
+    struct RenderTriangle {
+        projected_triangle: Triangle,
+        view_normal: Vec3,
+        material_index: usize,
+    }
+
+    let mut render_triangles: Vec<RenderTriangle> = scene
         .meshes
         .iter()
         .flat_map(|mesh| {
             mesh.triangles.iter().filter_map(|triangle| {
-                let mut camera_triangle = triangle.multiply_matrix(&camera_matrix);
+                let camera_triangle = triangle.multiply_matrix(&camera_matrix);
 
                 // HACK: *Bad* frustum culling
                 if !camera_frustum.contains(&camera_triangle.v0)
@@ -60,27 +72,30 @@ fn render(
                     return None;
                 }
 
-                // Camera lighting
-                camera_triangle.color.0 =
-                    ((camera_triangle.color.0 as f32) * -camera_triangle_normal.z) as u8;
-                camera_triangle.color.1 =
-                    ((camera_triangle.color.1 as f32) * -camera_triangle_normal.z) as u8;
-                camera_triangle.color.2 =
-                    ((camera_triangle.color.2 as f32) * -camera_triangle_normal.z) as u8;
-
                 let projected_triangle = camera_triangle.multiply_matrix(&projection_matrix);
 
-                Some(projected_triangle)
+                Some(RenderTriangle {
+                    projected_triangle,
+                    view_normal: camera_triangle_normal,
+                    material_index: mesh.material_index,
+                })
             })
         })
         .collect::<Vec<_>>();
 
     // HACK: Temporary triangle depth 'check'
-    render_triangles
-        .sort_by(|a, b| (a.v0.z + a.v1.z + a.v2.z).total_cmp(&(b.v0.z + b.v1.z + b.v2.z)));
+    render_triangles.sort_by(|a, b| {
+        (a.projected_triangle.v0.z + a.projected_triangle.v1.z + a.projected_triangle.v2.z)
+            .total_cmp(
+                &(b.projected_triangle.v0.z
+                    + b.projected_triangle.v1.z
+                    + b.projected_triangle.v2.z),
+            )
+    });
 
-    render_triangles.iter().for_each(|triangle| {
-        let screen_triangle = triangle
+    render_triangles.into_iter().for_each(|rt| {
+        let screen_triangle = rt
+            .projected_triangle
             .translate(&Vec3::new(1.0, 1.0, 0.0))
             .scale(&Vec3::new(
                 drawer.width() as f32 / 2.0,
@@ -88,7 +103,14 @@ fn render(
                 1.0,
             ));
 
-        let cell = Cell::new_bg(screen_triangle.color);
+        let material = &scene.materials[rt.material_index];
+        let mut color = material.sample(0.0, 0.0);
+
+        color.channels_mut().iter_mut().for_each(|c| {
+            *c = ((*c as f32) * -rt.view_normal.z) as u8;
+        });
+
+        let cell = Cell::new_bg(termion::color::Rgb(color.0[0], color.0[1], color.0[2]));
 
         drawer.triangle(
             &cell,
@@ -117,6 +139,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mut scene = Scene::new();
             let mesh = loaders::obj::load_mesh(std::fs::File::open(cli.file)?)?;
             scene.meshes.push(mesh);
+            scene
+                .materials
+                .push(Material::GenericColor(MaterialGenericColor::new(
+                    image::Rgb([255, 255, 255]),
+                )));
             scene
         }
         Some("glb") => loaders::gltf::load_scene(std::fs::File::open(cli.file)?)?,

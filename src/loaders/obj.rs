@@ -4,7 +4,7 @@ use crate::{math::vector3::Vec3, mesh::Mesh};
 
 pub fn load_mesh(mut file: impl Read) -> Result<Mesh, Box<dyn Error>> {
     let mut vertices: Vec<Vec3> = Vec::new();
-    let mut indices: Vec<(usize, usize, usize, termion::color::Rgb)> = Vec::new();
+    let mut indices: Vec<(usize, usize, usize)> = Vec::new();
 
     let mut str = String::new();
     file.read_to_string(&mut str)?;
@@ -33,12 +33,7 @@ pub fn load_mesh(mut file: impl Read) -> Result<Mesh, Box<dyn Error>> {
                         unimplemented!();
                     }
                     // Indices are 1-based
-                    indices.push((
-                        i[0] - 1,
-                        i[1] - 1,
-                        i[2] - 1,
-                        termion::color::Rgb(255, 255, 255),
-                    ));
+                    indices.push((i[0] - 1, i[1] - 1, i[2] - 1));
                 }
                 _ => {}
             }
@@ -46,5 +41,5 @@ pub fn load_mesh(mut file: impl Read) -> Result<Mesh, Box<dyn Error>> {
         })
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
-    Ok(Mesh::new_from_vertices_indices(&vertices, &indices))
+    Ok(Mesh::new_from_vertices_indices(0, &vertices, &indices))
 }

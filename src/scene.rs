@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use crate::{
+    material::Material,
     mesh::Mesh,
     raycast::{Ray, RayIntersection},
 };
@@ -8,11 +9,15 @@ use crate::{
 #[derive(Debug)]
 pub struct Scene {
     pub meshes: Vec<Mesh>,
+    pub materials: Vec<Material>,
 }
 
 impl Scene {
     pub fn new() -> Self {
-        Self { meshes: Vec::new() }
+        Self {
+            meshes: Vec::new(),
+            materials: Vec::new(),
+        }
     }
 
     pub fn intersect(&self, ray: &Ray) -> Option<RayIntersection> {
