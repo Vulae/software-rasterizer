@@ -1,4 +1,3 @@
-mod async_stdin;
 mod camera;
 mod display;
 mod loaders;
@@ -150,9 +149,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         _ => panic!("Invalid file."),
     };
 
-    let stdin = std::io::stdin();
+    //let stdin = std::io::stdin();
     // Initialize stdout for raw mode & mouse input.
     let mut stdout = termion::input::MouseTerminal::from(std::io::stdout().lock().into_raw_mode()?);
+    let stdin = termion::async_stdin();
 
     write!(
         stdout,
@@ -174,19 +174,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut mouse_right: bool = false;
     let mut mouse_pos: (usize, usize) = (0, 0);
 
-    for event in stdin.events() {
+    let mut events = stdin.events(); //.peekable();
+    'outer: loop {
         let mut display = Display::init(&BG_COLOR)?;
         controller.camera.aspect =
             (display.width() as f32) * CELL_ASPECT_RATIO / (display.height() as f32);
         let mut debug_text = String::new();
 
-        let event = event?;
         let mut mouse_movement: (isize, isize) = (0, 0);
-        match event {
-            termion::event::Event::Key(termion::event::Key::Esc)
-            | termion::event::Event::Key(termion::event::Key::Char('q')) => break,
-            termion::event::Event::Mouse(termion::event::MouseEvent::Press(press_button, x, y)) => {
-                match press_button {
+        for event in events.by_ref() {
+            let event = event?;
+            match event {
+                termion::event::Event::Key(termion::event::Key::Esc)
+                | termion::event::Event::Key(termion::event::Key::Char('q')) => break 'outer,
+                termion::event::Event::Mouse(termion::event::MouseEvent::Press(
+                    press_button,
+                    x,
+                    y,
+                )) => match press_button {
                     termion::event::MouseButton::WheelUp => {
                         controller.zoom_in();
                     }
@@ -202,34 +207,48 @@ fn main() -> Result<(), Box<dyn Error>> {
                         mouse_movement = (0, 0);
                         mouse_pos = ((x as usize) - 1, (y as usize) - 1);
                     }
+                },
+                termion::event::Event::Mouse(termion::event::MouseEvent::Release(x, y)) => {
+                    mouse_left = false;
+                    mouse_right = false;
+                    mouse_movement = (
+                        (x as isize) - 1 - (mouse_pos.0 as isize),
+                        (y as isize) - 1 - (mouse_pos.1 as isize),
+                    );
+                    mouse_pos = ((x as usize) - 1, (y as usize) - 1);
+                }
+                termion::event::Event::Mouse(termion::event::MouseEvent::Hold(x, y)) => {
+                    mouse_movement = (
+                        (x as isize) - 1 - (mouse_pos.0 as isize),
+                        (y as isize) - 1 - (mouse_pos.1 as isize),
+                    );
+                    mouse_pos = ((x as usize) - 1, (y as usize) - 1);
+                    if mouse_movement.0 == 0 && mouse_movement.1 == 0 {
+                        continue;
+                    }
+                }
+                termion::event::Event::Key(termion::event::Key::Left) => {
+                    controller.roll(0.2);
+                }
+                termion::event::Event::Key(termion::event::Key::Right) => {
+                    controller.roll(-0.2);
+                }
+                _ => {}
+            }
+
+            if mouse_left {
+                if !mouse_right {
+                    controller.grab_move(
+                        (mouse_movement.0 as f32) / 10.0,
+                        (mouse_movement.1 as f32) / CELL_ASPECT_RATIO / 10.0,
+                    );
+                } else {
+                    controller.pan_move(
+                        (mouse_movement.0 as f32) / 100.0,
+                        (mouse_movement.1 as f32) / CELL_ASPECT_RATIO / 100.0,
+                    );
                 }
             }
-            termion::event::Event::Mouse(termion::event::MouseEvent::Release(x, y)) => {
-                mouse_left = false;
-                mouse_right = false;
-                mouse_movement = (
-                    (x as isize) - 1 - (mouse_pos.0 as isize),
-                    (y as isize) - 1 - (mouse_pos.1 as isize),
-                );
-                mouse_pos = ((x as usize) - 1, (y as usize) - 1);
-            }
-            termion::event::Event::Mouse(termion::event::MouseEvent::Hold(x, y)) => {
-                mouse_movement = (
-                    (x as isize) - 1 - (mouse_pos.0 as isize),
-                    (y as isize) - 1 - (mouse_pos.1 as isize),
-                );
-                mouse_pos = ((x as usize) - 1, (y as usize) - 1);
-                if mouse_movement.0 == 0 && mouse_movement.1 == 0 {
-                    continue;
-                }
-            }
-            termion::event::Event::Key(termion::event::Key::Left) => {
-                controller.roll(0.2);
-            }
-            termion::event::Event::Key(termion::event::Key::Right) => {
-                controller.roll(-0.2);
-            }
-            _ => {}
         }
 
         writeln!(
@@ -241,20 +260,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         writeln!(debug_text, "Controller: {:?}", controller)?;
 
         let mut drawer = Drawer::new(&mut display);
-
-        if mouse_left {
-            if !mouse_right {
-                controller.grab_move(
-                    (mouse_movement.0 as f32) / 10.0,
-                    (mouse_movement.1 as f32) / CELL_ASPECT_RATIO / 10.0,
-                );
-            } else {
-                controller.pan_move(
-                    (mouse_movement.0 as f32) / 100.0,
-                    (mouse_movement.1 as f32) / CELL_ASPECT_RATIO / 100.0,
-                );
-            }
-        }
 
         render_count += 1;
         writeln!(debug_text, "Render count: {}", render_count)?;
