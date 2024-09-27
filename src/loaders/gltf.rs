@@ -358,9 +358,9 @@ pub fn load_scene(file: impl Read) -> Result<Scene, Box<dyn Error>> {
         // TEMP: Just only use white material for testing
         scene
             .materials
-            .push(Material::GenericColor(MaterialGenericColor::new(
-                image::Rgb([255, 255, 255]),
-            )));
+            .push(Box::new(MaterialGenericColor::new(image::Rgb([
+                255, 255, 255,
+            ]))));
     });
 
     Ok(scene)

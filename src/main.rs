@@ -6,124 +6,19 @@ mod math;
 mod mesh;
 mod raycast;
 mod reader;
+mod renderer;
 mod scene;
 
 use std::{error::Error, fmt::Write, io::Write as _, path::PathBuf};
 
-use camera::{Camera, CameraOrbitController, PerspectiveCamera};
 use clap::Parser;
-use display::{Cell, Display, Drawer};
-use image::Pixel;
-use material::{Material, MaterialGenericColor};
-use math::vector3::Vec3;
-use mesh::Triangle;
+use display::Drawer;
+use material::MaterialGenericColor;
+use renderer::Renderer;
 use scene::Scene;
 use termion::{input::TermRead, raw::IntoRawMode};
 
 static CELL_ASPECT_RATIO: f32 = 9.0 / 20.0;
-
-static BG_COLOR: Cell = Cell::new_bg(termion::color::Rgb(0, 0, 0));
-//static FG_COLOR: Cell = Cell::new_bg(termion::color::Rgb(255, 255, 255));
-
-fn render(
-    debug_text: &mut String,
-    drawer: &mut Drawer<'_>,
-    scene: &Scene,
-    camera: &impl Camera,
-) -> Result<(), Box<dyn Error>> {
-    let camera_matrix = camera.matrix_view();
-    let camera_frustum = camera.frustum();
-    let projection_matrix = camera.matrix_projection();
-
-    writeln!(
-        debug_text,
-        "Out buffer: {}x{}",
-        drawer.width(),
-        drawer.height(),
-    )?;
-
-    #[derive(Debug)]
-    struct RenderTriangle {
-        projected_triangle: Triangle,
-        view_normal: Vec3,
-        material_index: usize,
-    }
-
-    let mut render_triangles: Vec<RenderTriangle> = scene
-        .meshes
-        .iter()
-        .flat_map(|mesh| {
-            mesh.triangles.iter().filter_map(|triangle| {
-                let camera_triangle = triangle.multiply_matrix(&camera_matrix);
-
-                // HACK: *Bad* frustum culling
-                if !camera_frustum.contains(&camera_triangle.v0)
-                    || !camera_frustum.contains(&camera_triangle.v1)
-                    || !camera_frustum.contains(&camera_triangle.v2)
-                {
-                    return None;
-                }
-
-                let camera_triangle_normal = camera_triangle.normal();
-
-                // Backside culling
-                if camera_triangle_normal.z > 0.0 {
-                    return None;
-                }
-
-                let projected_triangle = camera_triangle.multiply_matrix(&projection_matrix);
-
-                Some(RenderTriangle {
-                    projected_triangle,
-                    view_normal: camera_triangle_normal,
-                    material_index: mesh.material_index,
-                })
-            })
-        })
-        .collect::<Vec<_>>();
-
-    // HACK: Temporary triangle depth 'check'
-    render_triangles.sort_by(|a, b| {
-        (a.projected_triangle.v0.z + a.projected_triangle.v1.z + a.projected_triangle.v2.z)
-            .total_cmp(
-                &(b.projected_triangle.v0.z
-                    + b.projected_triangle.v1.z
-                    + b.projected_triangle.v2.z),
-            )
-    });
-
-    render_triangles.into_iter().for_each(|rt| {
-        let screen_triangle = rt
-            .projected_triangle
-            .translate(&Vec3::new(1.0, 1.0, 0.0))
-            .scale(&Vec3::new(
-                drawer.width() as f32 / 2.0,
-                drawer.height() as f32 / 2.0,
-                1.0,
-            ));
-
-        let material = &scene.materials[rt.material_index];
-        let mut color = material.sample(0.0, 0.0);
-
-        color.channels_mut().iter_mut().for_each(|c| {
-            *c = ((*c as f32) * -rt.view_normal.z) as u8;
-        });
-
-        let cell = Cell::new_bg(termion::color::Rgb(color.0[0], color.0[1], color.0[2]));
-
-        drawer.triangle(
-            &cell,
-            screen_triangle.v0.x as isize,
-            screen_triangle.v0.y as isize,
-            screen_triangle.v1.x as isize,
-            screen_triangle.v1.y as isize,
-            screen_triangle.v2.x as isize,
-            screen_triangle.v2.y as isize,
-        );
-    });
-
-    Ok(())
-}
 
 #[derive(Parser)]
 struct Cli {
@@ -140,9 +35,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             scene.meshes.push(mesh);
             scene
                 .materials
-                .push(Material::GenericColor(MaterialGenericColor::new(
-                    image::Rgb([255, 255, 255]),
-                )));
+                .push(Box::new(MaterialGenericColor::new(image::Rgb([
+                    255, 255, 255,
+                ]))));
             scene
         }
         Some("glb") => loaders::gltf::load_scene(std::fs::File::open(cli.file)?)?,
@@ -166,20 +61,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
     stdout.flush()?;
 
-    let mut controller = CameraOrbitController::new(PerspectiveCamera::new(90.0, 0.1, 1000.0));
-    controller.set_distance(100.0);
+    let mut renderer = Renderer::new(scene);
+    renderer.controller.set_distance(100.0);
 
-    let mut render_count = 0;
     let mut mouse_left: bool = false;
     let mut mouse_right: bool = false;
     let mut mouse_pos: (usize, usize) = (0, 0);
 
     let mut events = stdin.events(); //.peekable();
     'outer: loop {
-        let mut display = Display::init(&BG_COLOR)?;
-        controller.camera.aspect =
-            (display.width() as f32) * CELL_ASPECT_RATIO / (display.height() as f32);
-        let mut debug_text = String::new();
+        let (width, height) = termion::terminal_size()?;
+        let (width, height) = (width as usize, height as usize);
+        renderer.controller.camera.aspect = (width as f32) * CELL_ASPECT_RATIO / (height as f32);
 
         let mut mouse_movement: (isize, isize) = (0, 0);
         for event in events.by_ref() {
@@ -193,10 +86,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                     y,
                 )) => match press_button {
                     termion::event::MouseButton::WheelUp => {
-                        controller.zoom_in();
+                        renderer.controller.zoom_in();
                     }
                     termion::event::MouseButton::WheelDown => {
-                        controller.zoom_out();
+                        renderer.controller.zoom_out();
                     }
                     _ => {
                         match press_button {
@@ -228,22 +121,22 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
                 termion::event::Event::Key(termion::event::Key::Left) => {
-                    controller.roll(0.2);
+                    renderer.controller.roll(0.2);
                 }
                 termion::event::Event::Key(termion::event::Key::Right) => {
-                    controller.roll(-0.2);
+                    renderer.controller.roll(-0.2);
                 }
                 _ => {}
             }
 
             if mouse_left {
                 if !mouse_right {
-                    controller.grab_move(
+                    renderer.controller.grab_move(
                         (mouse_movement.0 as f32) / 10.0,
                         (mouse_movement.1 as f32) / CELL_ASPECT_RATIO / 10.0,
                     );
                 } else {
-                    controller.pan_move(
+                    renderer.controller.pan_move(
                         (mouse_movement.0 as f32) / 100.0,
                         (mouse_movement.1 as f32) / CELL_ASPECT_RATIO / 100.0,
                     );
@@ -251,21 +144,22 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
 
+        let mut dbg_text = String::new();
+
         writeln!(
-            debug_text,
+            dbg_text,
             "{} {} {:?} {:?}",
             mouse_left, mouse_right, mouse_pos, mouse_movement,
         )?;
 
-        writeln!(debug_text, "Controller: {:?}", controller)?;
+        writeln!(dbg_text, "Controller: {:?}", renderer.controller)?;
+
+        let (mut display, render_info) = renderer.render(width, height)?;
+        writeln!(dbg_text, "Render info: {:?}", render_info)?;
 
         let mut drawer = Drawer::new(&mut display);
+        drawer.text(0, 0, &dbg_text, None, None);
 
-        render_count += 1;
-        writeln!(debug_text, "Render count: {}", render_count)?;
-        render(&mut debug_text, &mut drawer, &scene, &controller.camera)?;
-
-        drawer.text(0, 0, &debug_text, None, None);
         display.display(&mut stdout)?;
     }
 

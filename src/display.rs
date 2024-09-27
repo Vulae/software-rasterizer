@@ -43,14 +43,18 @@ pub struct Display {
 }
 
 impl Display {
-    pub fn init(fill: &Cell) -> std::io::Result<Self> {
-        let (width, height) = termion::terminal_size()?;
-        let (width, height) = (width as usize, height as usize);
-        Ok(Self {
+    pub fn init_with_size(fill: &Cell, width: usize, height: usize) -> Self {
+        Self {
             width,
             height,
             cells: vec![*fill; width * height].into_boxed_slice(),
-        })
+        }
+    }
+
+    pub fn init(fill: &Cell) -> std::io::Result<Self> {
+        let (width, height) = termion::terminal_size()?;
+        let (width, height) = (width as usize, height as usize);
+        Ok(Self::init_with_size(fill, width, height))
     }
 
     pub fn width(&self) -> usize {

@@ -9,7 +9,7 @@ use crate::{
 #[derive(Debug)]
 pub struct Scene {
     pub meshes: Vec<Mesh>,
-    pub materials: Vec<Material>,
+    pub materials: Vec<Box<dyn Material>>,
 }
 
 impl Scene {
