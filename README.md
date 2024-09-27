@@ -1,5 +1,5 @@
 
-# [software-renderer](https://github.com/Vulae/software-renderer)
+# [software-rasterizer](https://github.com/Vulae/software-rasterizer)
 
 Displays `.glb` (glTF) scene inside the console window.
 
