@@ -139,13 +139,19 @@ impl Renderer {
             //let cell = Cell::new_bg(termion::color::Rgb(color.0[0], color.0[1], color.0[2]));
 
             drawer
-                .iter_triangle(
-                    screen_v0.x as isize,
-                    screen_v0.y as isize,
-                    screen_v1.x as isize,
-                    screen_v1.y as isize,
-                    screen_v2.x as isize,
-                    screen_v2.y as isize,
+                .iter_rect(
+                    (screen_v0.x as isize)
+                        .min(screen_v1.x as isize)
+                        .min(screen_v2.x as isize),
+                    (screen_v0.y as isize)
+                        .min(screen_v1.y as isize)
+                        .min(screen_v2.y as isize),
+                    (screen_v0.x as isize)
+                        .max(screen_v1.x as isize)
+                        .max(screen_v2.x as isize),
+                    (screen_v0.y as isize)
+                        .max(screen_v1.y as isize)
+                        .max(screen_v2.y as isize),
                 )
                 .for_each(|(px, py)| {
                     let (v0, v1, v2) = (screen_v0, screen_v1, screen_v2);

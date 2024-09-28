@@ -207,47 +207,40 @@ impl<'a> Drawer<'a> {
         }
     }
 
-    fn line_high(&mut self, cell: &Cell, x0: isize, y0: isize, x1: isize, y1: isize) {
-        let mut dx = x1 - x0;
-        let dy = y1 - y0;
-        let mut xi = 1;
-        if dx < 0 {
-            xi = -1;
-            dx = -dx;
-        }
-        let mut d = (2 * dx) - dy;
-        let mut x = x0;
-        for y in y0..=y1 {
-            self.pixel(cell, x, y);
-            if d > 0 {
-                x += xi;
-                d += 2 * (dx - dy);
-            } else {
-                d += 2 * dx;
-            }
-        }
-    }
-
-    pub fn line(&mut self, cell: &Cell, x0: isize, y0: isize, x1: isize, y1: isize) {
+    pub fn iter_line(
+        &mut self,
+        mut x0: isize,
+        mut y0: isize,
+        x1: isize,
+        y1: isize,
+    ) -> impl Iterator<Item = (isize, isize)> {
+        // FIXME: This does not work.
+        std::iter::empty()
         // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
-        if isize::abs_diff(y1, y0) < isize::abs_diff(x1, x0) {
-            if x0 > x1 {
-                self.line_low(cell, x1, y1, x0, y0);
-            } else {
-                self.line_low(cell, x0, y0, x1, y1);
-            }
-        } else {
-            // Rust just really wants to format this to be hard to read.
-            #[allow(dead_code)]
-            if y0 > y1 {
-                self.line_high(cell, x1, y1, x0, y0);
-            } else {
-                self.line_high(cell, x0, y0, x1, y1);
-            }
-        }
+        //let dx = isize::abs(x1 - x0);
+        //let sx = if x0 < x1 { 1 } else { -1 };
+        //let dy = isize::abs(y1 - y0);
+        //let sy = if y0 < y1 { 1 } else { -1 };
+        //let mut error = dx + dy;
+        //
+        //std::iter::from_fn(move || {
+        //    if x0 == x1 && y0 == y1 {
+        //        return None;
+        //    }
+        //    let e2 = 2 * error;
+        //    if e2 >= dy {
+        //        error += dy;
+        //        x0 += sx;
+        //    }
+        //    if e2 <= dx {
+        //        error += dx;
+        //        y0 += sy;
+        //    }
+        //    Some((x0, y0))
+        //})
     }
 
-    fn iter_rect(
+    pub fn iter_rect(
         &self,
         mut x0: isize,
         mut y0: isize,
@@ -305,32 +298,5 @@ impl<'a> Drawer<'a> {
             y0.max(y1).max(y2),
         )
         .filter(move |(x, y)| is_point_inside_triangle(*x, *y, x0, y0, x1, y1, x2, y2))
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn triangle(
-        &mut self,
-        cell: &Cell,
-        x0: isize,
-        y0: isize,
-        x1: isize,
-        y1: isize,
-        x2: isize,
-        y2: isize,
-    ) {
-        // TODO: Instead implement https://github.com/OneLoneCoder/Javidx9/blob/master/ConsoleGameEngine/olcConsoleGameEngine.h#L537
-
-        const WIREFRAME: bool = false;
-
-        if !WIREFRAME {
-            self.iter_triangle(x0, y0, x1, y1, x2, y2)
-                .for_each(|(x, y)| {
-                    self.pixel(cell, x, y);
-                });
-        } else {
-            self.line(cell, x0, y0, x1, y1);
-            self.line(cell, x1, y1, x2, y2);
-            self.line(cell, x2, y2, x0, y0);
-        }
     }
 }
