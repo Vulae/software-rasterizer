@@ -8,6 +8,7 @@ mod raycast;
 mod reader;
 mod renderer;
 mod scene;
+mod uv;
 
 use std::{error::Error, fmt::Write, io::Write as _, path::PathBuf};
 
@@ -75,6 +76,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         renderer.controller.camera.aspect = (width as f32) * CELL_ASPECT_RATIO / (height as f32);
 
         let mut mouse_movement: (isize, isize) = (0, 0);
+        // FIXME: For some reason the iterator has an .unwrap() inside of it that is somehow
+        // panicing seemingly randomly @termion-4.0.2/src/event.rs:254:33?
+        // I'm pretty sure this is either a termion issue with decoding the mouse movement,
+        // or a kitty terminal issue with incorrectly encoding mouse movement?
+        // It happens so often it's extremely annoying.
         for event in events.by_ref() {
             let event = event?;
             match event {

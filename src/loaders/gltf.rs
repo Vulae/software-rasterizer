@@ -8,11 +8,12 @@ use std::{error::Error, io::Read};
 use serde::Deserialize;
 use termion::terminal_size_pixels;
 
-use crate::material::{Material, MaterialGenericColor};
+use crate::material::{Material, MaterialGenericColor, MaterialGenericTexture};
 use crate::math::vector3::Vec3;
 use crate::mesh::Mesh;
 use crate::reader::Reader;
 use crate::scene::Scene;
+use crate::uv::Uv;
 
 // NOTE: This is only really tested on a few files, probably won't work with anything that isn't
 // exported by Blender 4.2.1
@@ -191,6 +192,21 @@ impl From<AccessorValue> for Vec3 {
     }
 }
 
+// TODO: Please don't panic!
+impl From<AccessorValue> for Uv {
+    fn from(value: AccessorValue) -> Self {
+        match value {
+            AccessorValue::Vector(vec) => {
+                if vec.len() < 2 {
+                    panic!();
+                }
+                Uv::new(vec[0].into(), vec[1].into())
+            }
+            _ => panic!(),
+        }
+    }
+}
+
 impl JsonRoot {
     fn read_view<'a>(&self, buffers: &'a [Box<[u8]>], index: usize) -> &'a [u8] {
         let view = &self.bufferViews[index];
@@ -335,33 +351,47 @@ pub fn load_scene(file: impl Read) -> Result<Scene, Box<dyn Error>> {
         }
         let mesh = &json.meshes[node.mesh];
         mesh.primitives.iter().for_each(|primitive| {
-            let vertices: Vec<Vec3> = IntoIterator::into_iter(json
-                .read_accessor(&buffers, *primitive.attributes.get("POSITION").unwrap()))
+            let position: Vec<Vec3> = json
+                .read_accessor(&buffers, *primitive.attributes.get("POSITION").unwrap()).iter()
                 .map(|v| v.clone().into()) // ???
                 .collect();
-            let indices: Vec<usize> = IntoIterator::into_iter(json
-                .read_accessor(&buffers, primitive.indices))
+            let texcoord: Option<Vec<Uv>> = primitive.attributes.get("TEXCOORD_0").map(|t| {
+                json.read_accessor(&buffers, *t)
+                    .iter()
+                    .map(|v| v.clone().into()) // ???
+                    .collect()
+            });
+            let indices: Vec<(usize, usize, usize)> = json
+                .read_accessor(&buffers, primitive.indices).iter()
                 .map(|v| v.clone().into()) // ???
-                .collect();
-            let indices: Vec<(usize, usize, usize)> = indices
+                .collect::<Vec<_>>()
                 .chunks(3)
                 .map(|chunk| (chunk[0], chunk[1], chunk[2]))
                 .collect();
 
-            scene
-                .meshes
-                .push(Mesh::new_from_vertices_indices(0, &vertices, &indices));
+            scene.meshes.push(Mesh::new(0, position, texcoord, indices));
         });
     });
 
-    json.materials.iter().for_each(|material| {
-        // TEMP: Just only use white material for testing
-        scene
-            .materials
-            .push(Box::new(MaterialGenericColor::new(image::Rgb([
-                255, 255, 255,
-            ]))));
-    });
+    scene.materials = json
+        .materials
+        .iter()
+        .map(|material| {
+            if let Some(emmisive_texture) = &material.emissiveTexture {
+                let buf = json.read_view(
+                    &buffers,
+                    json.images[json.textures[emmisive_texture.index].source].bufferView,
+                );
+                let image = image::load_from_memory(buf)?;
+                Ok(Box::new(MaterialGenericTexture::new(image.into())) as Box<dyn Material>)
+            } else {
+                Ok(
+                    Box::new(MaterialGenericColor::new(image::Rgb([255, 255, 255])))
+                        as Box<dyn Material>,
+                )
+            }
+        })
+        .collect::<Result<Vec<Box<dyn Material>>, Box<dyn Error>>>()?;
 
     Ok(scene)
 }

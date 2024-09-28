@@ -8,8 +8,9 @@ use crate::{
     camera::{Camera, CameraOrbitController, PerspectiveCamera},
     display::{Cell, Display, Drawer},
     math::vector3::Vec3,
-    mesh::Triangle,
+    mesh::triangle_normal,
     scene::Scene,
+    uv::Uv,
 };
 
 static BG_COLOR: Cell = Cell::new_bg(termion::color::Rgb(0, 0, 0));
@@ -55,7 +56,12 @@ impl Renderer {
 
         #[derive(Debug)]
         struct RenderTriangle {
-            projected_triangle: Triangle,
+            v0: Vec3,
+            v1: Vec3,
+            v2: Vec3,
+            t0: Uv,
+            t1: Uv,
+            t2: Uv,
             view_normal: Vec3,
             material_index: usize,
         }
@@ -65,29 +71,42 @@ impl Renderer {
             .meshes
             .iter()
             .flat_map(|mesh| {
-                mesh.triangles.iter().filter_map(|triangle| {
-                    let camera_triangle = triangle.multiply_matrix(&camera_matrix);
+                mesh.indices.iter().filter_map(|(i0, i1, i2)| {
+                    let mut v0 = mesh.position[*i0];
+                    let mut v1 = mesh.position[*i1];
+                    let mut v2 = mesh.position[*i2];
+
+                    let cam_v0 = v0 * camera_matrix;
+                    let cam_v1 = v1 * camera_matrix;
+                    let cam_v2 = v2 * camera_matrix;
 
                     // HACK: *Bad* frustum culling
-                    if !camera_frustum.contains(&camera_triangle.v0)
-                        || !camera_frustum.contains(&camera_triangle.v1)
-                        || !camera_frustum.contains(&camera_triangle.v2)
+                    if !camera_frustum.contains(&cam_v0)
+                        || !camera_frustum.contains(&cam_v1)
+                        || !camera_frustum.contains(&cam_v2)
                     {
                         return None;
                     }
 
-                    let camera_triangle_normal = camera_triangle.normal();
+                    let cam_normal = triangle_normal(&cam_v0, &cam_v1, &cam_v2);
 
                     // Backside culling
-                    if camera_triangle_normal.z > 0.0 {
+                    if cam_normal.z > 0.0 {
                         return None;
                     }
 
-                    let projected_triangle = camera_triangle.multiply_matrix(&projection_matrix);
+                    let proj_v0 = cam_v0 * projection_matrix;
+                    let proj_v1 = cam_v1 * projection_matrix;
+                    let proj_v2 = cam_v2 * projection_matrix;
 
                     Some(RenderTriangle {
-                        projected_triangle,
-                        view_normal: camera_triangle_normal,
+                        v0: proj_v0,
+                        v1: proj_v1,
+                        v2: proj_v2,
+                        t0: Uv::new(0.0, 0.0),
+                        t1: Uv::new(0.0, 0.0),
+                        t2: Uv::new(0.0, 0.0),
+                        view_normal: cam_normal,
                         material_index: mesh.material_index,
                     })
                 })
@@ -95,24 +114,19 @@ impl Renderer {
             .collect::<Vec<_>>();
 
         // HACK: Temporary triangle depth 'check'
-        render_triangles.sort_by(|a, b| {
-            (a.projected_triangle.v0.z + a.projected_triangle.v1.z + a.projected_triangle.v2.z)
-                .total_cmp(
-                    &(b.projected_triangle.v0.z
-                        + b.projected_triangle.v1.z
-                        + b.projected_triangle.v2.z),
-                )
-        });
+        render_triangles
+            .sort_by(|a, b| (a.v0.z + a.v1.z + a.v2.z).total_cmp(&(b.v0.z + b.v1.z + b.v2.z)));
+
+        let screenspace_mul_vec = Vec3::new(
+            drawer.width() as f32 / 2.0,
+            drawer.height() as f32 / 2.0,
+            1.0,
+        );
 
         render_triangles.into_iter().for_each(|rt| {
-            let screen_triangle = rt
-                .projected_triangle
-                .translate(&Vec3::new(1.0, 1.0, 0.0))
-                .scale(&Vec3::new(
-                    drawer.width() as f32 / 2.0,
-                    drawer.height() as f32 / 2.0,
-                    1.0,
-                ));
+            let screen_v0 = (rt.v0 + Vec3::new(1.0, 1.0, 0.0)) * screenspace_mul_vec;
+            let screen_v1 = (rt.v1 + Vec3::new(1.0, 1.0, 0.0)) * screenspace_mul_vec;
+            let screen_v2 = (rt.v2 + Vec3::new(1.0, 1.0, 0.0)) * screenspace_mul_vec;
 
             let material = &self.scene.materials[rt.material_index];
             let mut color = material.sample(0.0, 0.0);
@@ -125,12 +139,12 @@ impl Renderer {
 
             drawer.triangle(
                 &cell,
-                screen_triangle.v0.x as isize,
-                screen_triangle.v0.y as isize,
-                screen_triangle.v1.x as isize,
-                screen_triangle.v1.y as isize,
-                screen_triangle.v2.x as isize,
-                screen_triangle.v2.y as isize,
+                screen_v0.x as isize,
+                screen_v0.y as isize,
+                screen_v1.x as isize,
+                screen_v1.y as isize,
+                screen_v2.x as isize,
+                screen_v2.y as isize,
             );
         });
 

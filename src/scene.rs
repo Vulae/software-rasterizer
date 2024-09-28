@@ -23,8 +23,7 @@ impl Scene {
     pub fn intersect(&self, ray: &Ray) -> Option<RayIntersection> {
         self.meshes
             .iter()
-            .flat_map(|mesh| mesh.triangles.iter())
-            .filter_map(|triangle| triangle.intersect(ray))
+            .filter_map(|mesh| mesh.intersect(ray))
             .reduce(|closest, intersection| {
                 if intersection.distance < closest.distance {
                     intersection

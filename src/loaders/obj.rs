@@ -41,5 +41,5 @@ pub fn load_mesh(mut file: impl Read) -> Result<Mesh, Box<dyn Error>> {
         })
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
-    Ok(Mesh::new_from_vertices_indices(0, &vertices, &indices))
+    Ok(Mesh::new(0, vertices, None, indices))
 }
