@@ -248,7 +248,7 @@ impl<'a> Drawer<'a> {
     }
 
     fn iter_rect(
-        &mut self,
+        &self,
         mut x0: isize,
         mut y0: isize,
         mut x1: isize,
@@ -262,18 +262,15 @@ impl<'a> Drawer<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn triangle(
-        &mut self,
-        cell: &Cell,
+    pub fn iter_triangle(
+        &self,
         x0: isize,
         y0: isize,
         x1: isize,
         y1: isize,
         x2: isize,
         y2: isize,
-    ) {
-        // TODO: Instead implement https://github.com/OneLoneCoder/Javidx9/blob/master/ConsoleGameEngine/olcConsoleGameEngine.h#L537
-
+    ) -> impl Iterator<Item = (isize, isize)> {
         // https://stackoverflow.com/questions/2049582/how-to-determine-if-a-point-is-in-a-2d-triangle#answer-2049593
 
         #[inline]
@@ -301,20 +298,35 @@ impl<'a> Drawer<'a> {
             !(has_neg && has_pos)
         }
 
+        self.iter_rect(
+            x0.min(x1).min(x2),
+            y0.min(y1).min(y2),
+            x0.max(x1).max(x2),
+            y0.max(y1).max(y2),
+        )
+        .filter(move |(x, y)| is_point_inside_triangle(*x, *y, x0, y0, x1, y1, x2, y2))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn triangle(
+        &mut self,
+        cell: &Cell,
+        x0: isize,
+        y0: isize,
+        x1: isize,
+        y1: isize,
+        x2: isize,
+        y2: isize,
+    ) {
+        // TODO: Instead implement https://github.com/OneLoneCoder/Javidx9/blob/master/ConsoleGameEngine/olcConsoleGameEngine.h#L537
+
         const WIREFRAME: bool = false;
 
         if !WIREFRAME {
-            self.iter_rect(
-                x0.min(x1).min(x2),
-                y0.min(y1).min(y2),
-                x0.max(x1).max(x2),
-                y0.max(y1).max(y2),
-            )
-            .for_each(|(x, y)| {
-                if is_point_inside_triangle(x, y, x0, y0, x1, y1, x2, y2) {
+            self.iter_triangle(x0, y0, x1, y1, x2, y2)
+                .for_each(|(x, y)| {
                     self.pixel(cell, x, y);
-                }
-            });
+                });
         } else {
             self.line(cell, x0, y0, x1, y1);
             self.line(cell, x1, y1, x2, y2);

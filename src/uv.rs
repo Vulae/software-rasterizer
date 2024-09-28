@@ -1,7 +1,7 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Uv {
-    u: f32,
-    v: f32,
+    pub u: f32,
+    pub v: f32,
 }
 
 impl Uv {

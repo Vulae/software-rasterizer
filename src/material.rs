@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use image::{Rgb, RgbaImage};
+use image::{Pixel, Rgb, RgbaImage};
 
 pub trait Material: std::fmt::Debug {
     fn sample(&self, u: f32, v: f32) -> Rgb<u8>;
@@ -9,37 +9,23 @@ pub trait Material: std::fmt::Debug {
 #[derive(Debug)]
 pub struct MaterialGenericTexture {
     image: RgbaImage,
-    avg_color: Rgb<u8>,
 }
 
 impl MaterialGenericTexture {
     pub fn new(image: RgbaImage) -> Self {
-        Self {
-            avg_color: {
-                let mut pixels = 0u64;
-                let total = image.pixels().fold((0u64, 0u64, 0u64), |(tr, tg, tb), c| {
-                    if (c.0[0] == 0 && c.0[1] == 0 && c.0[2] == 0) || c.0[3] == 0 {
-                        (tr, tg, tb)
-                    } else {
-                        pixels += 1;
-                        (tr + c.0[0] as u64, tg + c.0[1] as u64, tb + c.0[2] as u64)
-                    }
-                });
-                Rgb([
-                    (total.0 / pixels) as u8,
-                    (total.1 / pixels) as u8,
-                    (total.2 / pixels) as u8,
-                ])
-            },
-            image,
-        }
+        Self { image }
     }
 }
 
 impl Material for MaterialGenericTexture {
     fn sample(&self, u: f32, v: f32) -> Rgb<u8> {
-        // For now we just return avg color for testing
-        self.avg_color
+        let width = self.image.width();
+        let height = self.image.height();
+
+        let x = ((u * width as f32).floor() as u32) % width;
+        let y = ((v * height as f32).floor() as u32) % height;
+
+        self.image.get_pixel(x, y).to_rgb()
     }
 }
 

@@ -103,9 +103,9 @@ impl Renderer {
                         v0: proj_v0,
                         v1: proj_v1,
                         v2: proj_v2,
-                        t0: Uv::new(0.0, 0.0),
-                        t1: Uv::new(0.0, 0.0),
-                        t2: Uv::new(0.0, 0.0),
+                        t0: mesh.texcoord[*i0],
+                        t1: mesh.texcoord[*i1],
+                        t2: mesh.texcoord[*i2],
                         view_normal: cam_normal,
                         material_index: mesh.material_index,
                     })
@@ -124,28 +124,55 @@ impl Renderer {
         );
 
         render_triangles.into_iter().for_each(|rt| {
+            #[rustfmt::skip]
             let screen_v0 = (rt.v0 + Vec3::new(1.0, 1.0, 0.0)) * screenspace_mul_vec;
             let screen_v1 = (rt.v1 + Vec3::new(1.0, 1.0, 0.0)) * screenspace_mul_vec;
             let screen_v2 = (rt.v2 + Vec3::new(1.0, 1.0, 0.0)) * screenspace_mul_vec;
 
             let material = &self.scene.materials[rt.material_index];
-            let mut color = material.sample(0.0, 0.0);
+            //let mut color = material.sample(0.0, 0.0);
 
-            color.channels_mut().iter_mut().for_each(|c| {
-                *c = ((*c as f32) * -rt.view_normal.z) as u8;
-            });
+            //color.channels_mut().iter_mut().for_each(|c| {
+            //    *c = ((*c as f32) * -rt.view_normal.z) as u8;
+            //});
 
-            let cell = Cell::new_bg(termion::color::Rgb(color.0[0], color.0[1], color.0[2]));
+            //let cell = Cell::new_bg(termion::color::Rgb(color.0[0], color.0[1], color.0[2]));
 
-            drawer.triangle(
-                &cell,
-                screen_v0.x as isize,
-                screen_v0.y as isize,
-                screen_v1.x as isize,
-                screen_v1.y as isize,
-                screen_v2.x as isize,
-                screen_v2.y as isize,
-            );
+            drawer
+                .iter_triangle(
+                    screen_v0.x as isize,
+                    screen_v0.y as isize,
+                    screen_v1.x as isize,
+                    screen_v1.y as isize,
+                    screen_v2.x as isize,
+                    screen_v2.y as isize,
+                )
+                .for_each(|(px, py)| {
+                    let (v0, v1, v2) = (screen_v0, screen_v1, screen_v2);
+                    let denom = (v1.y - v2.y) * (v0.x - v2.x) + (v2.x - v1.x) * (v0.y - v2.y);
+                    let a = ((v1.y - v2.y) * (px as f32 - v2.x)
+                        + (v2.x - v1.x) * (py as f32 - v2.y))
+                        / denom;
+                    let b = ((v2.y - v0.y) * (px as f32 - v2.x)
+                        + (v0.x - v2.x) * (py as f32 - v2.y))
+                        / denom;
+                    let c = 1.0 - a - b;
+
+                    // FIXME: This condition stops weird textures with texture atlas.
+                    // But it also makes holes in the triangles.
+                    if a >= 0.0 && b >= 0.0 && c >= 0.0 {
+                        let uv = Uv::new(
+                            a * rt.t0.u + b * rt.t1.u + c * rt.t2.u,
+                            a * rt.t0.v + b * rt.t1.v + c * rt.t2.v,
+                        );
+
+                        let color = material.sample(uv.u, uv.v);
+                        let cell =
+                            Cell::new_bg(termion::color::Rgb(color.0[0], color.0[1], color.0[2]));
+
+                        drawer.pixel(&cell, px, py);
+                    }
+                });
         });
 
         Ok(())
