@@ -164,8 +164,6 @@ impl Renderer {
                         / denom;
                     let c = 1.0 - a - b;
 
-                    // FIXME: This condition stops weird textures with texture atlas.
-                    // But it also makes holes in the triangles.
                     if a >= 0.0 && b >= 0.0 && c >= 0.0 {
                         let uv = Uv::new(
                             a * rt.t0.u + b * rt.t1.u + c * rt.t2.u,
